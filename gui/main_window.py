@@ -15,11 +15,8 @@ from gui.remesas_tab import RemesasTab
 from gui.historial_tab import HistorialTab
 
 class MainWindow:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Sistema De Gestión Tryhards")
-        self.root.geometry("1400x900")
-        self.root.minsize(1200, 700)
+    def __init__(self, root):  # CAMBIADO: Recibe root como parámetro
+        self.root = root  # CAMBIADO: Usa la ventana ya creada
 
         # ESTILOS GLOBALES
         self.style, self.colors = apply_styles(self.root)
@@ -398,4 +395,5 @@ class MainWindow:
         self.historial_tab.pack(fill=tk.BOTH, expand=True)
 
     def run(self):
-        self.root.mainloop()
+        """Método mantenido para compatibilidad (ahora vacío)"""
+        pass  # mainloop se maneja en main.py
