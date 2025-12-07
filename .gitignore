@@ -17,3 +17,8 @@ reports/
 *.log 
 *.tmp 
 Thumbs.db 
+ 
+# PyInstaller - Archivos de compilacion 
+dist/ 
+build/ 
+*.spec 
