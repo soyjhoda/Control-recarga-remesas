@@ -1,0 +1,19 @@
+# Archivos Python 
+__pycache__/ 
+*.pyc 
+*.pyo 
+ 
+# Configuraciones locales 
+config/app_config.json 
+ 
+# Bases de datos 
+*.db 
+*.sqlite 
+ 
+# Reportes generados 
+reports/ 
+ 
+# Archivos temporales 
+*.log 
+*.tmp 
+Thumbs.db 
