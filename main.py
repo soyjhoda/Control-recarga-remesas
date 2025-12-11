@@ -18,6 +18,18 @@ from gui.main_window import MainWindow
 
 
 # ========================================
+# 🛠️ FUNCIÓN AUXILIAR PARA RUTAS DE RECURSOS
+# ========================================
+def get_resource_path(relative_path):
+    """Obtiene ruta para recursos en desarrollo y PyInstaller"""
+    try:
+        base_path = sys._MEIPASS  # Carpeta temporal de PyInstaller
+    except Exception:
+        base_path = os.path.abspath(".")  # Desarrollo normal
+    return os.path.join(base_path, relative_path)
+
+
+# ========================================
 # 🚀 FUNCIÓN PRINCIPAL
 # ========================================
 def main():
@@ -33,7 +45,7 @@ def main():
 
     # **MÉTODO ALTERNATIVO PARA ÍCONO**
     try:
-        ico_path = os.path.join("icons", "app.ico")
+        ico_path = get_resource_path(os.path.join("icons", "app.ico"))
         ico_path_abs = os.path.abspath(ico_path)
 
         print(f"🔍 Buscando ícono en: {ico_path_abs}")

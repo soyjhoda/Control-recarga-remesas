@@ -6,6 +6,7 @@ from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import os
 import json
+import sys
 
 from utils.config import LOGO_PATH
 from utils.styles import apply_styles, TECH_COLORS
@@ -36,15 +37,27 @@ class MainWindow:
         self._create_tabs()
 
     # ---------------------------------
+    # FUNCIÓN AUXILIAR PARA RUTAS (PYINSTALLER)
+    # ---------------------------------
+    def _get_resource_path(self, relative_path):
+        """Obtiene ruta para recursos en desarrollo y PyInstaller"""
+        try:
+            base_path = sys._MEIPASS  # Carpeta temporal de PyInstaller
+        except Exception:
+            base_path = os.path.abspath(".")  # Desarrollo normal
+        return os.path.join(base_path, relative_path)
+
+    # ---------------------------------
     # CONFIGURACIÓN DEL LOGO
     # ---------------------------------
     def _cargar_configuracion_logo(self):
         """Carga la configuración del logo, crea archivo si no existe"""
-        config_path = "config/app_config.json"
+        config_path = self._get_resource_path("config/app_config.json")
 
         # Si no existe la carpeta config, la crea
-        if not os.path.exists("config"):
-            os.makedirs("config")
+        config_dir = os.path.dirname(config_path)
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
 
         # Si no existe el archivo, lo crea con valores por defecto
         if not os.path.exists(config_path):
@@ -66,7 +79,7 @@ class MainWindow:
 
     def _guardar_configuracion_logo(self):
         """Guarda la configuración actual del logo"""
-        config_path = "config/app_config.json"
+        config_path = self._get_resource_path("config/app_config.json")
         try:
             with open(config_path, "w", encoding='utf-8') as f:
                 json.dump(self.logo_config, f, indent=4)
