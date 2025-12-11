@@ -27,6 +27,7 @@ class MainWindow:
         self.recargas_tab = None
         self.remesas_tab = None
         self.historial_tab = None
+        self.saldos_tab = None  # ✅ NUEVO: Referencia para gestión de saldos
 
         # Cargar configuración del logo
         self.logo_config = self._cargar_configuracion_logo()
@@ -273,14 +274,15 @@ class MainWindow:
         btn_restaurar.pack(side=tk.LEFT)
 
     # ---------------------------------
-    # PESTAÑAS (SIN CAMBIOS)
+    # PESTAÑAS (CON NUEVA PESTAÑA DE SALDOS)
     # ---------------------------------
     def _create_tabs(self):
-        """CREA 5 PESTAÑAS MODERNAS"""
+        """CREA 6 PESTAÑAS MODERNAS (5 originales + 1 nueva)"""
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=25, pady=(0, 25))
 
         self._create_dashboard_tab(self.notebook)
+        self._create_saldos_tab(self.notebook)  # ✅ NUEVA PESTAÑA
         self._create_admin_tab(self.notebook)
         self._create_recargas_tab(self.notebook)
         self._create_remesas_tab(self.notebook)
@@ -309,6 +311,10 @@ class MainWindow:
             # Si el dashboard tiene método de refresco, llamarlo
             if hasattr(self.dashboard_tab, '_actualizar_todo'):
                 self.dashboard_tab._actualizar_todo()
+        # ✅ NUEVO: Refrescar saldos cuando entres a esa pestaña
+        elif "💰 Saldos" in tab_text and self.saldos_tab is not None:
+            if hasattr(self.saldos_tab, 'recargar_datos'):
+                self.saldos_tab.recargar_datos()
 
     # DASHBOARD - ¡ACTUALIZADO Y CORREGIDO!
     def _create_dashboard_tab(self, notebook):
@@ -323,6 +329,44 @@ class MainWindow:
 
         # ¡ESTO ES LO QUE FALTABA! - Empaquetar el dashboard
         self.dashboard_tab.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+    # ✅ NUEVA PESTAÑA: GESTIÓN DE SALDOS
+    def _create_saldos_tab(self, notebook):
+        """PESTAÑA DE GESTIÓN DE SALDOS FINANCIEROS"""
+        # Importación condicional para evitar errores si no existe todavía
+        try:
+            from gui.saldos_tab import SaldosTab
+
+            frame = ttk.Frame(notebook)
+            notebook.add(frame, text="💰 Saldos")
+
+            # Crear la instancia de la pestaña de saldos
+            self.saldos_tab = SaldosTab(frame, self.colors)
+            self.saldos_tab.pack(fill=tk.BOTH, expand=True)
+
+        except ImportError:
+            # Si el archivo no existe todavía, crear un placeholder
+            frame = ttk.Frame(notebook)
+            notebook.add(frame, text="💰 Saldos (En desarrollo)")
+
+            # Mensaje temporal
+            placeholder_label = tk.Label(
+                frame,
+                text="🔧 Módulo de Gestión de Saldos en desarrollo\n\n"
+                     "Próximamente podrás gestionar tus cuentas:\n"
+                     "• Bancos (Venezuela, etc.)\n"
+                     "• Wallets (Airtm, Binance, PayPal)\n"
+                     "• Efectivo\n"
+                     "• Deducciones pendientes\n"
+                     "• Resumen financiero completo",
+                font=("Segoe UI", 14),
+                bg=self.colors["bg_primary"],
+                fg=self.colors["text_light"],
+                justify="center"
+            )
+            placeholder_label.pack(expand=True, fill=tk.BOTH, padx=50, pady=100)
+
+            self.saldos_tab = None
 
     # ADMIN (scrollable)
     def _create_admin_tab(self, notebook):

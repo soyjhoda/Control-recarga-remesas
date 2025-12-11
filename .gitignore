@@ -1,24 +1,50 @@
-# Archivos Python 
-__pycache__/ 
-*.pyc 
-*.pyo 
- 
-# Configuraciones locales 
-config/app_config.json 
- 
-# Bases de datos 
-*.db 
-*.sqlite 
- 
-# Reportes generados 
-reports/ 
- 
-# Archivos temporales 
-*.log 
-*.tmp 
-Thumbs.db 
- 
-# PyInstaller - Archivos de compilacion 
-dist/ 
-build/ 
-*.spec 
+# Archivos Python
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+*$py.class
+
+# Tu base de datos SQLite (ESTO ES CRÍTICO)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuraciones locales
+config/app_config.json
+
+# Reportes generados
+reports/
+
+# Archivos temporales
+*.log
+*.tmp
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# PyInstaller - Archivos de compilación
+dist/
+build/
+*.spec
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+.vscode/
+.idea/
+
+# Archivos de sistema operativo
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Archivos de usuario
+*.user

@@ -36,6 +36,9 @@ class RecargasTab(ttk.Frame):
         self.productos = []
         self.metodos_pago = []
 
+        # Variables para el campo cliente (NUEVO)
+        self.cliente_var = tk.StringVar()
+
         # Crear canvas con scroll
         self._crear_scrollable_frame()
 
@@ -162,31 +165,40 @@ class RecargasTab(ttk.Frame):
         )
         self.combo_metodo.grid(row=1, column=3, padx=5, sticky="w")
 
-        # ===== FILA 3: Juego y Producto =====
-        ttk.Label(form, text="🎮 Juego:", foreground=self.colors["text_light"],
+        # ===== FILA 3: Cliente (NUEVO CAMPO) =====
+        ttk.Label(form, text="👤 Cliente:", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
             row=2, column=0, sticky="w", pady=8
+        )
+        ttk.Entry(form, textvariable=self.cliente_var, width=40).grid(
+            row=2, column=1, columnspan=3, padx=5, sticky="w", pady=8
+        )
+
+        # ===== FILA 4: Juego y Producto =====
+        ttk.Label(form, text="🎮 Juego:", foreground=self.colors["text_light"],
+                 background=self.colors["bg_card"]).grid(
+            row=3, column=0, sticky="w", pady=8
         )
         self.juego_var = tk.StringVar()
         self.combo_juego = ttk.Combobox(
             form, textvariable=self.juego_var, state="readonly", width=24
         )
-        self.combo_juego.grid(row=2, column=1, padx=5, sticky="w")
+        self.combo_juego.grid(row=3, column=1, padx=5, sticky="w")
         self.combo_juego.bind("<<ComboboxSelected>>", self._filtrar_productos_por_juego)
 
         ttk.Label(form, text="📦 Producto:", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=2, column=2, sticky="w", padx=(20, 0)
+            row=3, column=2, sticky="w", padx=(20, 0)
         )
         self.producto_var = tk.StringVar()
         self.combo_producto = ttk.Combobox(
             form, textvariable=self.producto_var, state="readonly", width=24
         )
-        self.combo_producto.grid(row=2, column=3, padx=5, sticky="w")
+        self.combo_producto.grid(row=3, column=3, padx=5, sticky="w")
 
         # Separador - MONTO Y GANANCIAS
         ttk.Separator(form, orient="horizontal").grid(
-            row=3, column=0, columnspan=4, sticky="ew", pady=20
+            row=4, column=0, columnspan=4, sticky="ew", pady=20
         )
 
         ttk.Label(
@@ -195,12 +207,12 @@ class RecargasTab(ttk.Frame):
             font=("Segoe UI", 11, "bold"),
             foreground=self.colors["primary"],
             background=self.colors["bg_card"]
-        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(0, 10))
+        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
-        # ===== FILA 5: Montos principales =====
+        # ===== FILA 6: Montos principales =====
         ttk.Label(form, text="💵 Recibí del cliente (USD):", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=5, column=0, sticky="w", pady=8
+            row=6, column=0, sticky="w", pady=8
         )
         self.recibi_var = tk.StringVar()
         recibi_entry = ttk.Entry(
@@ -209,11 +221,11 @@ class RecargasTab(ttk.Frame):
             width=18,
             font=("Segoe UI", 12, "bold")
         )
-        recibi_entry.grid(row=5, column=1, padx=5, sticky="w")
+        recibi_entry.grid(row=6, column=1, padx=5, sticky="w")
 
         ttk.Label(form, text="📉 Costo real (USD):", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=5, column=2, sticky="w", padx=(20, 0)
+            row=6, column=2, sticky="w", padx=(20, 0)
         )
         self.costo_var = tk.StringVar()
         costo_entry = ttk.Entry(
@@ -222,12 +234,12 @@ class RecargasTab(ttk.Frame):
             width=18,
             font=("Segoe UI", 12, "bold")
         )
-        costo_entry.grid(row=5, column=3, padx=5, sticky="w")
+        costo_entry.grid(row=6, column=3, padx=5, sticky="w")
 
-        # ===== FILA 6: Comisión y Ganancia =====
+        # ===== FILA 7: Comisión y Ganancia =====
         ttk.Label(form, text="👷 Comisión vendedor (USD):", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=6, column=0, sticky="w", pady=8
+            row=7, column=0, sticky="w", pady=8
         )
         self.comision_var = tk.StringVar(value="0")
         comision_entry = ttk.Entry(
@@ -236,11 +248,11 @@ class RecargasTab(ttk.Frame):
             width=18,
             font=("Segoe UI", 12, "bold")
         )
-        comision_entry.grid(row=6, column=1, padx=5, sticky="w")
+        comision_entry.grid(row=7, column=1, padx=5, sticky="w")
 
         ttk.Label(form, text="✅ Ganancia:", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=6, column=2, sticky="w", padx=(20, 0)
+            row=7, column=2, sticky="w", padx=(20, 0)
         )
         self.ganancia_label = tk.Label(
             form,
@@ -249,22 +261,22 @@ class RecargasTab(ttk.Frame):
             foreground=self.colors["success"],
             background=self.colors["bg_card"]
         )
-        self.ganancia_label.grid(row=6, column=3, padx=5, sticky="w")
+        self.ganancia_label.grid(row=7, column=3, padx=5, sticky="w")
 
         # Separador - NOTAS
         ttk.Separator(form, orient="horizontal").grid(
-            row=7, column=0, columnspan=4, sticky="ew", pady=20
+            row=8, column=0, columnspan=4, sticky="ew", pady=20
         )
 
-        # ===== FILA 8: Notas =====
+        # ===== FILA 9: Notas =====
         ttk.Label(form, text="📝 Notas (opcional):", foreground=self.colors["text_light"],
                  background=self.colors["bg_card"]).grid(
-            row=8, column=0, sticky="nw", pady=5
+            row=9, column=0, sticky="nw", pady=5
         )
 
         # Frame para el Text con scroll
         notes_frame = ttk.Frame(form)
-        notes_frame.grid(row=8, column=1, columnspan=3, padx=5, sticky="w")
+        notes_frame.grid(row=9, column=1, columnspan=3, padx=5, sticky="w")
 
         # Scrollbar para notas
         notes_scroll = ttk.Scrollbar(notes_frame)
@@ -283,9 +295,9 @@ class RecargasTab(ttk.Frame):
         self.notas_text.pack(side="left", fill="both", expand=True)
         notes_scroll.config(command=self.notas_text.yview)
 
-        # ===== FILA 9: Botones =====
+        # ===== FILA 10: Botones =====
         btn_frame = ttk.Frame(form, style="Card.TFrame")
-        btn_frame.grid(row=9, column=0, columnspan=4, pady=25)
+        btn_frame.grid(row=10, column=0, columnspan=4, pady=25)
 
         ttk.Button(
             btn_frame,
@@ -327,7 +339,7 @@ class RecargasTab(ttk.Frame):
         )
         tree_scroll.pack(side="right", fill="y")
 
-        cols = ("id", "fecha", "trabajador", "juego", "recibido", "costo", "ganancia")
+        cols = ("id", "fecha", "trabajador", "cliente", "juego", "recibido", "costo", "ganancia")  # ✅ AGREGADO "cliente"
         self.tree_recargas = ttk.Treeview(
             table_inner_frame,
             columns=cols,
@@ -342,11 +354,12 @@ class RecargasTab(ttk.Frame):
         column_widths = {
             "id": 60,
             "fecha": 100,
-            "trabajador": 140,
-            "juego": 160,
-            "recibido": 120,
-            "costo": 120,
-            "ganancia": 120
+            "trabajador": 120,  # Reducido un poco para espacio
+            "cliente": 120,      # ✅ NUEVA COLUMNA
+            "juego": 140,
+            "recibido": 110,
+            "costo": 110,
+            "ganancia": 110
         }
 
         for col in cols:
@@ -528,7 +541,7 @@ class RecargasTab(ttk.Frame):
                 "❌ Error de validación",
                 "Debes llenar todos los campos obligatorios:\n"
                 "• Fecha\n• Trabajador\n• País\n• Método de pago\n• Recibí (USD)\n• Costo (USD)\n\n"
-                "Solo comisión y notas son opcionales."
+                "Solo comisión, cliente y notas son opcionales."
             )
             return False
         return True
@@ -545,6 +558,7 @@ class RecargasTab(ttk.Frame):
             recibi = float(self.recibi_var.get())
             costo = float(self.costo_var.get())
             comision = float(self.comision_var.get() or 0)
+            cliente = self.cliente_var.get().strip() or None  # ✅ NUEVO: Obtener nombre del cliente
 
             # Obtener IDs de combobox
             worker_id = self._obtener_id_seleccion(self.trabajador_var.get(), self.trabajadores)
@@ -563,7 +577,7 @@ class RecargasTab(ttk.Frame):
 
             notas = self.notas_text.get("1.0", "end").strip() or None
 
-            # Guardar en base de datos
+            # Guardar en base de datos CON CLIENTE
             recarga_id = agregar_recarga(
                 date_str=fecha,
                 worker_id=worker_id,
@@ -574,16 +588,20 @@ class RecargasTab(ttk.Frame):
                 seller_commission_usd=comision,
                 game_id=juego_id,
                 product_id=producto_id,
+                customer_name=cliente,  # ✅ NUEVO: Pasar nombre del cliente
                 notes=notas,
             )
 
             if recarga_id:
                 ganancia = recibi - costo - comision
+                mensaje_cliente = f"👤 Cliente: {cliente or 'No especificado'}\n" if cliente else ""
+
                 messagebox.showinfo(
                     "✅ ¡Éxito!",
                     f"Recarga guardada correctamente\n\n"
                     f"📋 ID: {recarga_id}\n"
                     f"👤 Trabajador: {self.trabajador_var.get()}\n"
+                    f"{mensaje_cliente}"  # ✅ Agregado cliente (si existe)
                     f"💰 Recibido: ${recibi:.2f}\n"
                     f"📉 Costo: ${costo:.2f}\n"
                     f"✅ Ganancia: ${ganancia:.2f}"
@@ -618,6 +636,7 @@ class RecargasTab(ttk.Frame):
         # Limpiar otros campos
         self.combo_juego.set("")
         self.combo_producto.set("")
+        self.cliente_var.set("")  # ✅ NUEVO: Limpiar campo cliente
         self.recibi_var.set("")
         self.costo_var.set("")
         self.comision_var.set("0")
@@ -640,7 +659,7 @@ class RecargasTab(ttk.Frame):
             if not recargas:
                 # Si no hay recargas, mostrar mensaje
                 self.tree_recargas.insert("", "end", values=(
-                    "--", "--", "No hay recargas", "--", "--", "--", "--"
+                    "--", "--", "No hay recargas", "--", "--", "--", "--", "--"
                 ))
                 # Actualizar contador
                 self.contador_label.config(text="📊 Recargas hoy: 0")
@@ -660,6 +679,11 @@ class RecargasTab(ttk.Frame):
                 if not juego_nombre or juego_nombre == "None":
                     juego_nombre = "Sin juego"
 
+                # Obtener nombre del cliente
+                cliente_nombre = r.get("customer_name", "")
+                if not cliente_nombre:
+                    cliente_nombre = "Sin cliente"
+
                 self.tree_recargas.insert(
                     "",
                     "end",
@@ -668,6 +692,7 @@ class RecargasTab(ttk.Frame):
                         r.get("id", "--"),
                         r.get("date", "--"),
                         r.get("worker_name", "N/A"),
+                        cliente_nombre,  # ✅ AGREGADO: Mostrar cliente
                         juego_nombre,
                         f"${r.get('amount_received_usd', 0):.2f}",
                         f"${r.get('cost_usd', 0):.2f}",
@@ -679,7 +704,7 @@ class RecargasTab(ttk.Frame):
             print(f"Error al cargar recargas: {str(e)}")
             # Mostrar mensaje de error en tabla
             self.tree_recargas.insert("", "end", values=(
-                "--", "--", f"Error: {str(e)[:30]}...", "--", "--", "--", "--"
+                "--", "--", f"Error: {str(e)[:30]}...", "--", "--", "--", "--", "--"
             ))
 
     def _eliminar_recarga(self):
@@ -703,8 +728,9 @@ class RecargasTab(ttk.Frame):
             "🗑️ Confirmar eliminación",
             f"¿Estás seguro de eliminar la recarga #{recarga_id}?\n\n"
             f"Trabajador: {item['values'][2]}\n"
-            f"Juego: {item['values'][3]}\n"
-            f"Monto: {item['values'][4]}\n\n"
+            f"Cliente: {item['values'][3]}\n"  # ✅ Agregado cliente en mensaje
+            f"Juego: {item['values'][4]}\n"
+            f"Monto: {item['values'][5]}\n\n"
             "⚠️ Esta acción no se puede deshacer."
         )
 

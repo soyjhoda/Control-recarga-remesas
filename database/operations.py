@@ -7,6 +7,7 @@ database/operations.py - [translate:BASE DE DATOS TRYHARDS - CATÁLOGOS + TRANSA
 │     - Trabajadores, Países, Métodos de pago, Juegos, Productos, Monedas
 │ • Tablas operacionales para Recargas y Remesas
 │ • Funciones especiales para Dashboard/Historial
+│ • ✅ NUEVO: Gestión de saldos financieros
 """
 
 import os
@@ -30,7 +31,7 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 # ========================================
-# 🧱 CREACIÓN DE TABLAS
+# 🧱 CREACIÓN Y ACTUALIZACIÓN DE TABLAS
 # ========================================
 
 def _create_tables(conn: sqlite3.Connection) -> None:
@@ -102,7 +103,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
         );
     """)
 
-    # Recargas (TODO EN USD)
+    # Recargas (TODO EN USD) - CON CAMPO CLIENTE
     cur.execute("""
         CREATE TABLE IF NOT EXISTS recharges (
             id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +117,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             cost_usd              REAL NOT NULL,
             seller_commission_usd REAL NOT NULL,
             profit_usd            REAL NOT NULL,
+            customer_name         TEXT,               -- ✅ NUEVO CAMPO: Nombre del cliente
             notes                 TEXT,
             created_at            TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (worker_id)         REFERENCES workers(id),
@@ -172,7 +174,104 @@ def _create_tables(conn: sqlite3.Connection) -> None:
         );
     """)
 
+    # ✅ NUEVO: CUENTAS FINANCIERAS (para gestión de saldos)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS financial_accounts (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL UNIQUE,  -- Ej: "Banco Venezuela", "Airtm", "Binance"
+            type        TEXT NOT NULL,         -- banco, wallet, efectivo, otro
+            balance     REAL NOT NULL DEFAULT 0.0,
+            currency    TEXT NOT NULL DEFAULT 'USD',
+            tags        TEXT,                  -- JSON o texto separado por comas: "liquidez,recargas"
+            notes       TEXT,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+    """)
+
+    # ✅ NUEVO: DEDUCCIONES / GASTOS PENDIENTES
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS financial_deductions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,          -- "Vuelto a Carlos", "Comisión PayPal"
+            amount      REAL NOT NULL,          -- Monto negativo (siempre positivo en BD, tiene signo negativo en lógica)
+            status      TEXT NOT NULL DEFAULT 'pending',  -- pending, resolved
+            account_id  INTEGER,                -- Opcional: relacionado con una cuenta específica
+            due_date    TEXT,                   -- Fecha límite opcional
+            notes       TEXT,
+            resolved_at TEXT,                   -- Cuando se marca como resuelto
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (account_id) REFERENCES financial_accounts(id)
+        );
+    """)
+
+    # ✅ NUEVO: HISTORIAL DE MOVIMIENTOS DE CUENTAS
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS account_movements (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id  INTEGER NOT NULL,
+            type        TEXT NOT NULL,          -- deposit, withdrawal, adjustment
+            amount      REAL NOT NULL,
+            old_balance REAL NOT NULL,
+            new_balance REAL NOT NULL,
+            description TEXT NOT NULL,
+            notes       TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (account_id) REFERENCES financial_accounts(id)
+        );
+    """)
+
+    # ✅ NUEVO: SNAPSHOTS DE SITUACIÓN FINANCIERA
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS financial_snapshots (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,          -- "Saldo 10-Dic", "Antes de pagar proveedores"
+            total_balance REAL NOT NULL,
+            subtotal     REAL NOT NULL,         -- Suma de todas las cuentas
+            total_deductions REAL NOT NULL,     -- Suma de deducciones pendientes
+            notes        TEXT,
+            snapshot_data TEXT NOT NULL,        -- JSON con detalles completos
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+    """)
+
     conn.commit()
+
+def _actualizar_esquema(conn: sqlite3.Connection) -> None:
+    """
+    ✅ SISTEMA DE ACTUALIZACIÓN AUTOMÁTICA DE ESQUEMA
+    Agrega columnas faltantes a tablas existentes SIN perder datos.
+    Se ejecuta cada vez que se inicia la aplicación.
+    """
+    cur = conn.cursor()
+
+    try:
+        # Verificar si la columna customer_name existe en recharges
+        cur.execute("PRAGMA table_info(recharges)")
+        columnas = [col[1] for col in cur.fetchall()]  # Nombre de columnas
+
+        if 'customer_name' not in columnas:
+            print("🔄 Actualizando esquema: agregando customer_name a recharges...")
+            cur.execute("ALTER TABLE recharges ADD COLUMN customer_name TEXT")
+            conn.commit()
+            print("✅ Columna customer_name agregada exitosamente")
+
+    except Exception as e:
+        print(f"⚠️ Error al verificar/esquema recharges: {e}")
+        # No hacemos commit si hay error
+
+    # En el futuro, puedes agregar más verificaciones aquí:
+    # Ejemplo: verificar otras columnas nuevas, tablas nuevas, etc.
+
+    # try:
+    #     cur.execute("PRAGMA table_info(otra_tabla)")
+    #     columnas = [col[1] for col in cur.fetchall()]
+    #     if 'nueva_columna' not in columnas:
+    #         cur.execute("ALTER TABLE otra_tabla ADD COLUMN nueva_columna TEXT")
+    #         conn.commit()
+    # except Exception as e:
+    #     print(f"⚠️ Error al verificar otra_tabla: {e}")
 
 # ========================================
 # 🚀 INICIALIZAR DESDE main.py
@@ -181,10 +280,12 @@ def _create_tables(conn: sqlite3.Connection) -> None:
 def inicializar_base_de_datos() -> None:
     """
     Crea app.db y todas las tablas necesarias si no existen.
+    Actualiza el esquema de tablas existentes.
     Se llama una sola vez al iniciar la aplicación.
     """
     conn = get_connection()
-    _create_tables(conn)
+    _create_tables(conn)       # ✅ Crea tablas si no existen
+    _actualizar_esquema(conn)  # ✅ Actualiza tablas existentes (NUEVO)
     conn.close()
 
 # ========================================
@@ -479,6 +580,7 @@ def agregar_recarga(
     seller_commission_usd: float,
     game_id: Optional[int] = None,
     product_id: Optional[int] = None,
+    customer_name: Optional[str] = None,  # ✅ NUEVO PARÁMETRO: Nombre del cliente
     notes: Optional[str] = None,
 ) -> int:
     """
@@ -493,12 +595,12 @@ def agregar_recarga(
         INSERT INTO recharges (
             date, worker_id, country_id, game_id, product_id,
             payment_method_id, amount_received_usd, cost_usd,
-            seller_commission_usd, profit_usd, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            seller_commission_usd, profit_usd, customer_name, notes  -- ✅ Agregado customer_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  -- ✅ Un parámetro más
     """, (
         date_str, worker_id, country_id, game_id, product_id,
         payment_method_id, amount_received_usd, cost_usd,
-        seller_commission_usd, profit_usd, notes
+        seller_commission_usd, profit_usd, customer_name, notes  # ✅ Agregado customer_name
     ))
     conn.commit()
     rid = cur.lastrowid
@@ -558,6 +660,7 @@ def editar_recarga(
     seller_commission_usd: float,
     game_id: Optional[int] = None,
     product_id: Optional[int] = None,
+    customer_name: Optional[str] = None,  # ✅ NUEVO PARÁMETRO: Nombre del cliente
     notes: Optional[str] = None,
 ) -> bool:
     """
@@ -571,12 +674,12 @@ def editar_recarga(
         UPDATE recharges SET
             date = ?, worker_id = ?, country_id = ?, game_id = ?, product_id = ?,
             payment_method_id = ?, amount_received_usd = ?, cost_usd = ?,
-            seller_commission_usd = ?, profit_usd = ?, notes = ?
+            seller_commission_usd = ?, profit_usd = ?, customer_name = ?, notes = ?  -- ✅ Agregado customer_name
         WHERE id = ?
     """, (
         date_str, worker_id, country_id, game_id, product_id,
         payment_method_id, amount_received_usd, cost_usd,
-        seller_commission_usd, profit_usd, notes, recarga_id
+        seller_commission_usd, profit_usd, customer_name, notes, recarga_id  # ✅ Agregado customer_name
     ))
     conn.commit()
     ok = cur.rowcount > 0
@@ -745,6 +848,639 @@ def listar_remesas() -> list[dict[str, Any]]:
         LEFT JOIN currencies cu ON r.currency_id = cu.id
         ORDER BY r.date DESC, r.id DESC
     """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+# ========================================
+# ✅ NUEVO: GESTIÓN DE SALDOS FINANCIEROS
+# ========================================
+
+# 🔸 CUENTAS FINANCIERAS
+def agregar_cuenta_financiera(
+    nombre: str,
+    tipo: str = "otro",
+    balance: float = 0.0,
+    currency: str = "USD",
+    tags: Optional[str] = None,
+    notas: Optional[str] = None
+) -> int:
+    """
+    Agrega una nueva cuenta financiera (ej: Banco Venezuela, Airtm, Binance).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Verificar si ya existe
+    cur.execute("SELECT id FROM financial_accounts WHERE name = ?", (nombre,))
+    if cur.fetchone():
+        conn.close()
+        raise ValueError(f"Ya existe una cuenta con el nombre '{nombre}'")
+
+    cur.execute("""
+        INSERT INTO financial_accounts (name, type, balance, currency, tags, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (nombre, tipo, balance, currency, tags, notas))
+
+    conn.commit()
+    cuenta_id = cur.lastrowid
+
+    # Registrar movimiento inicial
+    if balance != 0:
+        cur.execute("""
+            INSERT INTO account_movements (account_id, type, amount, old_balance, new_balance, description)
+            VALUES (?, 'deposit', ?, 0.0, ?, 'Saldo inicial')
+        """, (cuenta_id, balance, balance))
+        conn.commit()
+
+    conn.close()
+    return cuenta_id
+
+def editar_cuenta_financiera(
+    cuenta_id: int,
+    nuevo_nombre: Optional[str] = None,
+    nuevo_tipo: Optional[str] = None,
+    nuevo_balance: Optional[float] = None,
+    nueva_currency: Optional[str] = None,
+    nuevos_tags: Optional[str] = None,
+    nuevas_notas: Optional[str] = None
+) -> bool:
+    """
+    Edita una cuenta financiera existente.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Obtener datos actuales
+    cur.execute("SELECT name, balance FROM financial_accounts WHERE id = ?", (cuenta_id,))
+    cuenta = cur.fetchone()
+    if not cuenta:
+        conn.close()
+        return False
+
+    # Construir query dinámica
+    campos = []
+    valores = []
+
+    if nuevo_nombre is not None:
+        # Verificar que el nuevo nombre no exista en otra cuenta
+        cur.execute("SELECT id FROM financial_accounts WHERE name = ? AND id != ?", (nuevo_nombre, cuenta_id))
+        if cur.fetchone():
+            conn.close()
+            raise ValueError(f"Ya existe otra cuenta con el nombre '{nuevo_nombre}'")
+        campos.append("name = ?")
+        valores.append(nuevo_nombre)
+
+    if nuevo_tipo is not None:
+        campos.append("type = ?")
+        valores.append(nuevo_tipo)
+
+    if nuevo_balance is not None:
+        old_balance = cuenta['balance']
+        campos.append("balance = ?")
+        valores.append(nuevo_balance)
+
+        # Registrar movimiento si cambió el balance
+        if old_balance != nuevo_balance:
+            tipo_mov = "deposit" if nuevo_balance > old_balance else "withdrawal"
+            monto = abs(nuevo_balance - old_balance)
+            desc = "Ajuste manual de saldo"
+
+            cur.execute("""
+                INSERT INTO account_movements (account_id, type, amount, old_balance, new_balance, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (cuenta_id, tipo_mov, monto, old_balance, nuevo_balance, desc))
+
+    if nueva_currency is not None:
+        campos.append("currency = ?")
+        valores.append(nueva_currency)
+
+    if nuevos_tags is not None:
+        campos.append("tags = ?")
+        valores.append(nuevos_tags)
+
+    if nuevas_notas is not None:
+        campos.append("notes = ?")
+        valores.append(nuevas_notas)
+
+    # Agregar updated_at
+    campos.append("updated_at = datetime('now')")
+
+    if campos:
+        valores.append(cuenta_id)
+        query = f"UPDATE financial_accounts SET {', '.join(campos)} WHERE id = ?"
+        cur.execute(query, valores)
+        conn.commit()
+
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def eliminar_cuenta_financiera(cuenta_id: int) -> bool:
+    """
+    Marca una cuenta como inactiva (soft delete).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE financial_accounts
+        SET is_active = 0, updated_at = datetime('now')
+        WHERE id = ?
+    """, (cuenta_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def listar_cuentas_financieras_activas() -> list[dict[str, Any]]:
+    """
+    Lista todas las cuentas financieras activas.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, type, balance, currency, tags, notes, created_at, updated_at
+        FROM financial_accounts
+        WHERE is_active = 1
+        ORDER BY
+            CASE type
+                WHEN 'banco' THEN 1
+                WHEN 'wallet' THEN 2
+                WHEN 'efectivo' THEN 3
+                ELSE 4
+            END, name
+    """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+def obtener_cuenta_financiera(cuenta_id: int) -> Optional[dict[str, Any]]:
+    """
+    Obtiene una cuenta financiera específica.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, name, type, balance, currency, tags, notes, created_at, updated_at
+        FROM financial_accounts
+        WHERE id = ? AND is_active = 1
+    """, (cuenta_id,))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def actualizar_balance_cuenta(cuenta_id: int, nuevo_balance: float, descripcion: str = "Ajuste manual") -> bool:
+    """
+    Actualiza el balance de una cuenta y registra el movimiento.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Obtener balance actual
+    cur.execute("SELECT balance FROM financial_accounts WHERE id = ?", (cuenta_id,))
+    result = cur.fetchone()
+    if not result:
+        conn.close()
+        return False
+
+    old_balance = result['balance']
+
+    if old_balance == nuevo_balance:
+        conn.close()
+        return True  # No hay cambio
+
+    # Determinar tipo de movimiento
+    tipo_mov = "deposit" if nuevo_balance > old_balance else "withdrawal"
+    monto = abs(nuevo_balance - old_balance)
+
+    # Actualizar cuenta
+    cur.execute("""
+        UPDATE financial_accounts
+        SET balance = ?, updated_at = datetime('now')
+        WHERE id = ?
+    """, (nuevo_balance, cuenta_id))
+
+    # Registrar movimiento
+    cur.execute("""
+        INSERT INTO account_movements (account_id, type, amount, old_balance, new_balance, description)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (cuenta_id, tipo_mov, monto, old_balance, nuevo_balance, descripcion))
+
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def agregar_movimiento_cuenta(
+    cuenta_id: int,
+    tipo: str,
+    monto: float,
+    descripcion: str,
+    notas: Optional[str] = None
+) -> bool:
+    """
+    Agrega un movimiento a una cuenta y actualiza su balance automáticamente.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Obtener balance actual
+    cur.execute("SELECT balance FROM financial_accounts WHERE id = ?", (cuenta_id,))
+    result = cur.fetchone()
+    if not result:
+        conn.close()
+        return False
+
+    old_balance = result['balance']
+
+    # Calcular nuevo balance
+    if tipo == "deposit":
+        new_balance = old_balance + monto
+    elif tipo == "withdrawal":
+        new_balance = old_balance - monto
+    else:  # adjustment
+        new_balance = monto  # En adjustments, monto es el nuevo balance total
+
+    # Actualizar cuenta
+    cur.execute("""
+        UPDATE financial_accounts
+        SET balance = ?, updated_at = datetime('now')
+        WHERE id = ?
+    """, (new_balance, cuenta_id))
+
+    # Registrar movimiento
+    cur.execute("""
+        INSERT INTO account_movements (account_id, type, amount, old_balance, new_balance, description, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (cuenta_id, tipo, monto, old_balance, new_balance, descripcion, notas))
+
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def obtener_movimientos_cuenta(cuenta_id: int, limite: int = 50) -> list[dict[str, Any]]:
+    """
+    Obtiene los últimos movimientos de una cuenta.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, type, amount, old_balance, new_balance, description, notes, created_at
+        FROM account_movements
+        WHERE account_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (cuenta_id, limite))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+# 🔸 DEDUCCIONES / GASTOS PENDIENTES
+def agregar_deduccion(
+    descripcion: str,
+    monto: float,
+    cuenta_id: Optional[int] = None,
+    fecha_limite: Optional[str] = None,
+    notas: Optional[str] = None
+) -> int:
+    """
+    Agrega una deducción pendiente (gasto, vuelto, etc.).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO financial_deductions (description, amount, account_id, due_date, notes)
+        VALUES (?, ?, ?, ?, ?)
+    """, (descripcion, monto, cuenta_id, fecha_limite, notas))
+
+    conn.commit()
+    deduccion_id = cur.lastrowid
+    conn.close()
+    return deduccion_id
+
+def marcar_deduccion_resuelta(deduccion_id: int) -> bool:
+    """
+    Marca una deducción como resuelta.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE financial_deductions
+        SET status = 'resolved', resolved_at = datetime('now')
+        WHERE id = ?
+    """, (deduccion_id,))
+
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def eliminar_deduccion(deduccion_id: int) -> bool:
+    """
+    Elimina físicamente una deducción.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM financial_deductions WHERE id = ?", (deduccion_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+def listar_deducciones_pendientes() -> list[dict[str, Any]]:
+    """
+    Lista todas las deducciones pendientes.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT
+            d.*,
+            a.name as account_name
+        FROM financial_deductions d
+        LEFT JOIN financial_accounts a ON d.account_id = a.id
+        WHERE d.status = 'pending'
+        ORDER BY
+            CASE WHEN d.due_date IS NULL THEN 1 ELSE 0 END,
+            d.due_date,
+            d.created_at
+    """)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+def listar_todas_deducciones(limite: int = 100) -> list[dict[str, Any]]:
+    """
+    Lista todas las deducciones (pendientes y resueltas).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT
+            d.*,
+            a.name as account_name
+        FROM financial_deductions d
+        LEFT JOIN financial_accounts a ON d.account_id = a.id
+        ORDER BY d.status, d.created_at DESC
+        LIMIT ?
+    """, (limite,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+# 🔸 RESUMEN FINANCIERO
+def obtener_resumen_financiero() -> dict[str, Any]:
+    """
+    Calcula el resumen financiero completo:
+    - Subtotal (suma de todos los saldos)
+    - Total deducciones pendientes
+    - Total real
+    - Desglose por tipo de cuenta
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Obtener suma de saldos de cuentas activas
+    cur.execute("""
+        SELECT
+            COALESCE(SUM(balance), 0) as subtotal,
+            COUNT(*) as total_cuentas
+        FROM financial_accounts
+        WHERE is_active = 1
+    """)
+    resultado = dict(cur.fetchone() or {})
+
+    # Obtener suma de deducciones pendientes
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total_deducciones
+        FROM financial_deductions
+        WHERE status = 'pending'
+    """)
+    deducciones = dict(cur.fetchone() or {})
+
+    # Obtener desglose por tipo de cuenta
+    cur.execute("""
+        SELECT
+            type,
+            COUNT(*) as cantidad,
+            COALESCE(SUM(balance), 0) as total
+        FROM financial_accounts
+        WHERE is_active = 1
+        GROUP BY type
+        ORDER BY total DESC
+    """)
+    desglose_tipos = [dict(r) for r in cur.fetchall()]
+
+    conn.close()
+
+    subtotal = resultado.get('subtotal', 0) or 0
+    total_deducciones = deducciones.get('total_deducciones', 0) or 0
+    total_real = subtotal - total_deducciones
+
+    return {
+        'subtotal': subtotal,
+        'total_deducciones': total_deducciones,
+        'total_real': total_real,
+        'total_cuentas': resultado.get('total_cuentas', 0) or 0,
+        'desglose_por_tipo': desglose_tipos,
+        'cuentas_con_saldo': [t for t in desglose_tipos if t['total'] > 0]
+    }
+
+def obtener_saldos_por_tipo() -> dict[str, float]:
+    """
+    Obtiene los saldos agrupados por tipo de cuenta.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            type,
+            COALESCE(SUM(balance), 0) as total
+        FROM financial_accounts
+        WHERE is_active = 1
+        GROUP BY type
+    """)
+
+    resultados = {}
+    for row in cur.fetchall():
+        resultados[row['type']] = row['total']
+
+    conn.close()
+    return resultados
+
+# 🔸 SNAPSHOTS / HITOS
+def crear_snapshot_financiero(
+    nombre: str,
+    notas: Optional[str] = None
+) -> int:
+    """
+    Crea un snapshot de la situación financiera actual.
+    """
+    # Obtener resumen actual
+    resumen = obtener_resumen_financiero()
+
+    # Obtener detalles de cuentas
+    cuentas = listar_cuentas_financieras_activas()
+
+    # Obtener deducciones pendientes
+    deducciones = listar_deducciones_pendientes()
+
+    # Crear datos del snapshot
+    snapshot_data = {
+        'resumen': resumen,
+        'cuentas': cuentas,
+        'deducciones': deducciones,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # Convertir a JSON string
+    import json
+    data_str = json.dumps(snapshot_data, default=str, ensure_ascii=False)
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO financial_snapshots (name, total_balance, subtotal, total_deductions, notes, snapshot_data)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        nombre,
+        resumen['total_real'],
+        resumen['subtotal'],
+        resumen['total_deducciones'],
+        notas,
+        data_str
+    ))
+
+    conn.commit()
+    snapshot_id = cur.lastrowid
+    conn.close()
+    return snapshot_id
+
+def listar_snapshots_financieros(limite: int = 20) -> list[dict[str, Any]]:
+    """
+    Lista todos los snapshots guardados.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, name, total_balance, subtotal, total_deductions, notes, created_at
+        FROM financial_snapshots
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limite,))
+
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+def obtener_snapshot_financiero(snapshot_id: int) -> Optional[dict[str, Any]]:
+    """
+    Obtiene un snapshot específico.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, name, total_balance, subtotal, total_deductions, notes, snapshot_data, created_at
+        FROM financial_snapshots
+        WHERE id = ?
+    """, (snapshot_id,))
+
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    resultado = dict(row)
+
+    # Parsear JSON si existe
+    if resultado.get('snapshot_data'):
+        import json
+        try:
+            resultado['data_parsed'] = json.loads(resultado['snapshot_data'])
+        except:
+            resultado['data_parsed'] = {}
+
+    return resultado
+
+def eliminar_snapshot_financiero(snapshot_id: int) -> bool:
+    """
+    Elimina un snapshot.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM financial_snapshots WHERE id = ?", (snapshot_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+# 🔸 FUNCIONES DE BÚSQUEDA Y FILTRO
+def buscar_cuentas_por_nombre(busqueda: str) -> list[dict[str, Any]]:
+    """
+    Busca cuentas por nombre.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, name, type, balance, currency, tags, notes
+        FROM financial_accounts
+        WHERE is_active = 1 AND name LIKE ?
+        ORDER BY name
+    """, (f"%{busqueda}%",))
+
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+def filtrar_cuentas_por_tipo(tipo: str) -> list[dict[str, Any]]:
+    """
+    Filtra cuentas por tipo.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, name, type, balance, currency, tags, notes
+        FROM financial_accounts
+        WHERE is_active = 1 AND type = ?
+        ORDER BY name
+    """, (tipo,))
+
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+def filtrar_cuentas_por_saldo(min_saldo: float = 0, max_saldo: Optional[float] = None) -> list[dict[str, Any]]:
+    """
+    Filtra cuentas por rango de saldo.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if max_saldo is not None:
+        cur.execute("""
+            SELECT id, name, type, balance, currency, tags, notes
+            FROM financial_accounts
+            WHERE is_active = 1 AND balance BETWEEN ? AND ?
+            ORDER BY balance DESC
+        """, (min_saldo, max_saldo))
+    else:
+        cur.execute("""
+            SELECT id, name, type, balance, currency, tags, notes
+            FROM financial_accounts
+            WHERE is_active = 1 AND balance >= ?
+            ORDER BY balance DESC
+        """, (min_saldo,))
+
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
     return rows
@@ -932,6 +1668,7 @@ def obtener_transacciones_combinadas(fecha_inicio: str = None, fecha_fin: str = 
                 r.cost_usd as costo,
                 r.seller_commission_usd as comision,
                 r.profit_usd as ganancia,
+                r.customer_name as cliente_nombre,  -- ✅ NUEVO: Incluir nombre del cliente
                 NULL as currency_code,
                 NULL as amount_origin,
                 NULL as rate_origin_to_bs,
@@ -987,6 +1724,7 @@ def obtener_transacciones_combinadas(fecha_inicio: str = None, fecha_fin: str = 
                 NULL as costo,
                 r.seller_commission_usdt as comision,
                 NULL as ganancia,
+                NULL as cliente_nombre,  -- ✅ Para mantener consistencia en columnas
                 cu.code as currency_code,
                 r.amount_origin,
                 r.rate_origin_to_bs,
